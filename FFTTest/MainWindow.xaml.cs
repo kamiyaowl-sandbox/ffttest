@@ -43,6 +43,18 @@ namespace FFTTest {
             freqChart.ChartAreas[0].AxisX.MajorGrid.Enabled = true;
             freqChart.ChartAreas[0].AxisY.MajorGrid.Enabled = true;
 
+            var r = new Random();
+            for (int i = 0; i < 100; ++i) {
+                var num1 = r.NextDouble() * 1000 * (r.Next(2) < 1 ? -1 : 1);
+                var num2 = r.NextDouble() * 1000 * (r.Next(2) < 1 ? -1 : 1);
+                var numResult = new SignedFixedPoint(12, 12) { Double = num1 + num2 };
+
+                var fp1 = new SignedFixedPoint(12, 12) { Double = num1 };
+                var fp2 = new SignedFixedPoint(12, 12) { Double = num2 };
+                var fpResult = fp1 + fp2;
+                Console.WriteLine($"num1:{num1}\tnum2:{num2}\tnumResult:{numResult}\tfpResult:{fpResult}");
+            }
+
         }
 
         private void startFFTButton_Click(object sender, RoutedEventArgs e) {
@@ -134,6 +146,68 @@ namespace FFTTest {
                     data |= (((j >> i) & 0x1) << (width - 1 - i));
                 }
                 yield return data;
+            }
+        }
+
+        /// <summary>
+        /// 高速フーリエ変換を行います(組み込み向けモディファイ)
+        /// </summary>
+        /// <param name="sampleN"></param>
+        /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
+        /// <param name="dstArr">スペクトラムの配列</param>
+        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
+
+        }
+        private static void fft2Impl(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
+            //元データをビット反転してコピー
+            var bitWidth = (int)Math.Log(sampleN, 2);
+            var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシングテーブル
+            dstArr = new Complex[sampleN];
+            //Debug.WriteLine($"N = {sampleN} FFT Data BitReverseAddressing");
+            foreach (var pair in addressingArr.Select((y, x) => new { SrcIndex = x, DstIndex = y })) {
+                dstArr[pair.DstIndex] = srcArr[pair.SrcIndex];
+
+                //Debug.WriteLine($"\tsrc[0b{Convert.ToString(pair.SrcIndex, 2).PadLeft(bitWidth, '0')}]\t->\tdst[0b{Convert.ToString(pair.DstIndex, 2).PadLeft(bitWidth, '0')}]");
+            }
+            //バタフライ演算回数
+            int stageN = (int)Math.Log(sampleN, 2);//定数
+            //回転子の事前計算
+            var wMax = sampleN / 2;
+            var wTable = Enumerable.Range(0, wMax).Select(n => Complex.Exp(-Complex.ImaginaryOne * 2 * Math.PI * n / sampleN)).ToArray();
+
+
+            /* バタフライ演算をする */
+            for (int stage = 0; stage < stageN; ++stage) {
+                int indexN = sampleN >> stage;
+                int subIndexN = 0x1 << stage;
+                //Debug.WriteLine($"STAGE{stage} Index[{indexN},{subIndexN}]");
+
+                //0 ~ sampleN / 2まで2個ずつ処理する
+                for (int i = 0; i < sampleN / 2; ++i) {
+                    //ビット反転前のインデックス
+                    int index1 = (i >> stage) << 1;
+                    int index2 = index1 + 1;
+                    int subIndex = i & ~(0xffff << stage);
+                    //実データへのアドレスは {index,subIndex}
+                    int addr1 = (index1 << stage) + subIndex;//元の配列の位置
+                    int addr2 = (index2 << stage) + subIndex;//元の配列の位置
+                    //回転子決定
+                    int wIndex = (((subIndex) & ~(0xffff << stage)) << (stageN - stage - 1));
+                    //Debug.WriteLine($"i:{i}\twIndex:{wIndex}\tdata1[{index1}, {subIndex}](addr:{addr1}) \t data2[{index2}, {subIndex}](addr:{addr2})");
+
+                    //計算
+                    var srcData1 = dstArr[addr1];
+                    var srcData2 = dstArr[addr2];
+                    var w = wTable[wIndex];
+                    var multiplyData = w * srcData2;
+                    var dstData1 = srcData1 + multiplyData;
+                    var dstData2 = srcData1 - multiplyData;
+                    dstArr[addr1] = dstData1;
+                    dstArr[addr2] = dstData2;
+                    Debug.WriteLine($"{stage},{i},{addr1},{addr2},{multiplyData.Real},{multiplyData.Imaginary},{dstData1.Real},{dstData1.Imaginary},{dstData2.Real},{dstData2.Imaginary},");
+                }
+
+
             }
         }
         /// <summary>
