@@ -90,10 +90,23 @@ namespace FFTTest {
             var startTime = Environment.TickCount;
             fft(srcSampleN, srcArr, ref dstArr);
             var elapsedTime = Environment.TickCount - startTime;
-            timeText.Content = $"{elapsedTime}[ms]";
+
+            var deltaF = sampleFreq / (srcSampleN);//スペクトラムの間隔
+            var deltaT = srcSampleN / sampleFreq;//データの有効時間
+            timeText.Text = $"{elapsedTime}[ms]\r\n⊿f={deltaF}\r\n⊿T={deltaT}";
 
             freqChart.Series.Clear();
-            freqChart.AddSeries("fft", dstArr.Select(x => x.Magnitude).ToArray());
+            //freqChart.AddSeries("Re", dstArr
+            //                                .Select(x => x.Real)
+            //                                .ToArray());
+            //freqChart.AddSeries("Ie", dstArr
+            //                                .Select(x => x.Imaginary)
+            //                                .ToArray());
+            freqChart.AddSeries("fft", dstArr
+                                            .Take(srcSampleN / 2)
+                                            .Select(x => x.Magnitude)
+                                            .Select((x, i) => new DataPoint(i * deltaF, x))
+                                            .ToArray());
 
         }
 
@@ -130,35 +143,41 @@ namespace FFTTest {
         /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
         /// <param name="dstArr"></param>
         private static void fft(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
-            srcArr.CopyTo(dstArr, 0);
+            //元データをビット反転してコピー
+            var bitWidth = (int)Math.Log(sampleN, 2);
+            var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシング（多分ソフトのみ)
+            dstArr = new Complex[sampleN];
+            Debug.WriteLine($"N = {sampleN} FFT Data BitReverseAddressing");
+            foreach (var pair in addressingArr.Select((y, x) => new { SrcIndex = x, DstIndex = y })) {
+                dstArr[pair.DstIndex] = srcArr[pair.SrcIndex];
 
+                //Debug.WriteLine($"\tsrc[0b{Convert.ToString(pair.SrcIndex, 2).PadLeft(bitWidth, '0')}]\t->\tdst[0b{Convert.ToString(pair.DstIndex, 2).PadLeft(bitWidth, '0')}]");
+            }
+            //バタフライ演算回数
             int stageN = (int)Math.Log(sampleN, 2);//定数
-            /* 回転子の事前計算 */
+            //回転子の事前計算
             var wMax = sampleN / 2;
-            var wTable = Enumerable.Range(0, wMax).Select(i => Complex.Exp(-i * 2 * Math.PI / sampleN)).ToArray();
-            /* FFt本体の計算、複数ステージのバタフライ演算をする */
-            for (int stage = 0; stage < stageN; ++stage) {
-                int indexN = sampleN >> (stage + 1);//sampleN -> sampleN/2 -> sampleN/4 ... 1
-                int subIndexN = 0x1 << (stage + 1);//2 -> 4 -> 8-> ... sampleN
-                int bitLength = stageN - stage;//ビット反転アドレッシングの幅
-                var addressingArr = generateBitReverseArr(bitLength).ToArray();//アドレッシング（多分ソフトのみ)
+            var wTable = Enumerable.Range(0, wMax).Select(n => Complex.Exp(-Complex.ImaginaryOne * 2 * Math.PI * n / sampleN)).ToArray();
 
-                Debug.WriteLine($"STAGE{stage} --bit-length[{bitLength}]--> Index[{indexN}][{subIndexN}]");
+
+            /* バタフライ演算をする */
+            for (int stage = 0; stage < stageN; ++stage) {
+                int indexN = sampleN >> stage;
+                int subIndexN = 0x1 << stage;
+                Debug.WriteLine($"STAGE{stage} Index[{indexN},{subIndexN}]");
+
                 //0 ~ sampleN / 2まで2個ずつ処理する
                 for (int i = 0; i < sampleN / 2; ++i) {
                     //ビット反転前のインデックス
                     int index1 = (i >> stage) << 1;
                     int index2 = index1 + 1;
                     int subIndex = i & ~(0xffff << stage);
-                    //ビット反転後のインデックス
-                    int reverseIndex1 = addressingArr[index1];
-                    int reverseIndex2 = addressingArr[index2];
                     //実データへのアドレスは {index,subIndex}
-                    int addr1 = (reverseIndex1 << stage) + subIndex;//元の配列の位置
-                    int addr2 = (reverseIndex2 << stage) + subIndex;//元の配列の位置
+                    int addr1 = (index1 << stage) + subIndex;//元の配列の位置
+                    int addr2 = (index2 << stage) + subIndex;//元の配列の位置
                     //回転子決定
                     int wIndex = (((subIndex) & ~(0xffff << stage)) << (stageN - stage - 1));
-                    Debug.WriteLine($"i:{i}\tindex[{index1}, {index2}]\treverseIndex[{reverseIndex1}, {reverseIndex2}]\tsubIndex:{subIndex}\taddr[{addr1}, {addr2}]\twIndex:{wIndex}");
+                    //Debug.WriteLine($"i:{i}\twIndex:{wIndex}\tdata1[{index1}, {subIndex}](addr:{addr1}) \t data2[{index2}, {subIndex}](addr:{addr2})");
 
                     //計算
                     var srcData1 = dstArr[addr1];

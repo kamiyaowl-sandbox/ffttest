@@ -55,7 +55,7 @@
                 <ComboBoxItem Content="1024"/>
                 <ComboBoxItem Content="2048"/>
             </ComboBox>
-            <Label x:Name="timeText" Content="0[ms]" Margin="10,0,9,35" VerticalAlignment="Bottom"/>
+            <TextBlock x:Name="timeText" Text="result" Margin="10,261,9,35"/>
         </Grid>
     </Grid>
 </Window>

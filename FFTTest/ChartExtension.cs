@@ -19,6 +19,17 @@ namespace FFTTest {
             }
             c.Series.Add(series);
         }
+        public static void AddSeries(this Chart c, string name, IEnumerable<DataPoint> data) {
+            // Seriesの作成と値の追加
+            var series = new Series();
+            series.ChartType = SeriesChartType.Line;
+            series.MarkerStyle = MarkerStyle.Circle;
+            series.LegendText = name;
+            foreach (var d in data) {
+                series.Points.Add(d);
+            }
+            c.Series.Add(series);
+        }
         public static void AddSeries(this Chart c, string name, double sampleFreq, IEnumerable<double> data) {
             // Seriesの作成と値の追加
             var series = new Series();
