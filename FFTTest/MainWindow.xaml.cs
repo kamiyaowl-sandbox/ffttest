@@ -107,42 +107,53 @@ namespace FFTTest {
         /// <summary>
         /// ビット反転テーブルを生成します
         /// </summary>
-        /// <param name="max">テーブル表現最大値+1 {2,4,8,16}</param>
+        /// <param name="max">ビット幅</param>
         /// <returns></returns>
-        private static IEnumerable<int> generateBitReverseArr(int max) {
-            int width = (int)Math.Log(max + 1, 2) + 1;
+        private static IEnumerable<int> generateBitReverseArr(int width) {
+            int max = 0x1 << width;
             for (int j = 0; j < max; ++j) {
                 int data = 0x0;
                 for (int i = 0; i < width; ++i) {
-                    data |= (((j >> i) & 0x1) << (width - 2 - i));
+                    data |= (((j >> i) & 0x1) << (width - 1 - i));
                 }
                 yield return data;
             }
         }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sampleN"></param>
+        /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
+        /// <param name="dstArr"></param>
         private static void fft(int sampleN, Complex[] srcArr, Complex[] dstArr) {
-            int stageN = (int)Math.Log(sampleN, 2);
+            int stageN = (int)Math.Log(sampleN, 2);//定数
             /* 回転子の事前計算 */
             var wMax = sampleN / 2;
             var w = Enumerable.Range(0, wMax).Select(i => Complex.Exp(-i * 2 * Math.PI / sampleN)).ToArray();
             /* FFt本体の計算 */
             for (int stage = 0; stage < stageN; ++stage) {
-                int indexN = sampleN >> (stage + 1);
-                int subIndexN = 0x1 << (stage + 1);
-                int bitLength = (int)Math.Log(indexN + 1, 2);
+                int indexN = sampleN >> (stage + 1);//sampleN -> sampleN/2 -> sampleN/4 ... 1
+                int subIndexN = 0x1 << (stage + 1);//2 -> 4 -> 8-> ... sampleN
+                int bitLength = stageN - stage;//ビット反転アドレッシングの幅
+                var addressingArr = generateBitReverseArr(bitLength).ToArray();//アドレッシング（多分ソフトのみ)
+
                 Debug.WriteLine($"STAGE{stage} --bit-length[{bitLength}]--> Index[{indexN}][{subIndexN}]");
-                //N/2 -> N/4 -> N/8 ... 2
-                for (int index = 0 ; index < indexN; ++index) {
-                    //現在の転送番号
-                    int srcCount = 0;
-                    //反転テーブルを生成
-                    var addressingArr = generateBitReverseArr(indexN).ToArray();
-                    //1 -> 2 -> 4 -> 8 -> ... N/2
-                    for (int subIndex = 0; subIndex < subIndexN; ++subIndex) {
-                        //回転子インデックス(subIndexにステージ数に応じた基数を作って、ステージ数に応じた間隔になるよう倍にしてる)
-                        int wIndex = ((subIndex & ~(0xffff << stage)) << (stageN - stage - 1));
-                        Debug.WriteLine($"stage:{stage}\tindex:{index}\tsubIndex:{subIndex}\twIndex:{wIndex}");
-                    }
+                //0 ~ sampleN / 2まで2個ずつ処理する
+                for (int i = 0; i < sampleN / 2; ++i) {
+                    //データ選択
+                    int index = i >> stage;
+                    int subIndex = i & (subIndexN - 1);
+                    int dataIndex1 = addressingArr[(index << 1)];
+                    int dataIndex2 = addressingArr[(index << 1) + 1];
+                    //実データへのアドレスは {index,subIndex}
+                    int addr1 = (dataIndex1 << stage) + subIndex;//元の配列の位置
+                    int addr2 = (dataIndex2 << stage) + subIndex;//元の配列の位置
+                    //回転子決定
+                    int wIndex = (((subIndex) & ~(0xffff << stage)) << (stageN - stage - 1));
+                    Debug.WriteLine($"\tindex:{index:d4}\tsub:{subIndex:d4}\t\tdataIndex1:{dataIndex1:d4}\tdataIndex2:{dataIndex2:d4}\t\taddr1:{i:d4}\taddr2:{addr2:d4}\twIndex:{wIndex:d4}");
                 }
+
+
             }
         }
     }
