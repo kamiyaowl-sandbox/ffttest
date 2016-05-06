@@ -137,17 +137,17 @@ namespace FFTTest {
             }
         }
         /// <summary>
-        /// 
+        /// 高速フーリエ変換を行います
         /// </summary>
         /// <param name="sampleN"></param>
         /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
-        /// <param name="dstArr"></param>
+        /// <param name="dstArr">スペクトラムの配列</param>
         private static void fft(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
             //元データをビット反転してコピー
             var bitWidth = (int)Math.Log(sampleN, 2);
-            var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシング（多分ソフトのみ)
+            var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシングテーブル
             dstArr = new Complex[sampleN];
-            Debug.WriteLine($"N = {sampleN} FFT Data BitReverseAddressing");
+            //Debug.WriteLine($"N = {sampleN} FFT Data BitReverseAddressing");
             foreach (var pair in addressingArr.Select((y, x) => new { SrcIndex = x, DstIndex = y })) {
                 dstArr[pair.DstIndex] = srcArr[pair.SrcIndex];
 
@@ -164,7 +164,7 @@ namespace FFTTest {
             for (int stage = 0; stage < stageN; ++stage) {
                 int indexN = sampleN >> stage;
                 int subIndexN = 0x1 << stage;
-                Debug.WriteLine($"STAGE{stage} Index[{indexN},{subIndexN}]");
+                //Debug.WriteLine($"STAGE{stage} Index[{indexN},{subIndexN}]");
 
                 //0 ~ sampleN / 2まで2個ずつ処理する
                 for (int i = 0; i < sampleN / 2; ++i) {
@@ -188,6 +188,7 @@ namespace FFTTest {
                     var dstData2 = srcData1 - multiplyData;
                     dstArr[addr1] = dstData1;
                     dstArr[addr2] = dstData2;
+                    Debug.WriteLine($"{stage},{i},{addr1},{addr2},{multiplyData.Real},{multiplyData.Imaginary},{dstData1.Real},{dstData1.Imaginary},{dstData2.Real},{dstData2.Imaginary},");
                 }
 
 
