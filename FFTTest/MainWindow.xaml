@@ -7,7 +7,7 @@
         xmlns:wfc="clr-namespace:System.Windows.Forms.DataVisualization.Charting;assembly=System.Windows.Forms.DataVisualization"
 
         mc:Ignorable="d"
-        Title="MainWindow" Height="350" Width="525" Loaded="Window_Loaded">
+        Title="MainWindow" Height="382.692" Width="570.192" Loaded="Window_Loaded">
     <Grid Name="grid1">
         <Grid.ColumnDefinitions>
             <ColumnDefinition/>
@@ -55,6 +55,7 @@
                 <ComboBoxItem Content="1024"/>
                 <ComboBoxItem Content="2048"/>
             </ComboBox>
+            <Label x:Name="timeText" Content="0[ms]" Margin="10,0,9,35" VerticalAlignment="Bottom"/>
         </Grid>
     </Grid>
 </Window>

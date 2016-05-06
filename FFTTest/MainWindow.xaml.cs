@@ -82,14 +82,18 @@ namespace FFTTest {
                     break;
             }
             srcArr = srcDatas.Take(srcSampleN).Select(x => new Complex(x, 0)).ToArray();
-            dstArr = new Complex[srcArr.Length];
+            dstArr = new Complex[srcSampleN];
             //一旦表示
             timeChart.Series.Clear();
             timeChart.AddSeries("src", sampleFreq, srcDatas.Take(srcSampleN));
             //FFT開始
             var startTime = Environment.TickCount;
-            fft(srcSampleN, srcArr, dstArr);
+            fft(srcSampleN, srcArr, ref dstArr);
             var elapsedTime = Environment.TickCount - startTime;
+            timeText.Content = $"{elapsedTime}[ms]";
+
+            freqChart.Series.Clear();
+            freqChart.AddSeries("fft", dstArr.Select(x => x.Magnitude).ToArray());
 
         }
 
@@ -125,12 +129,14 @@ namespace FFTTest {
         /// <param name="sampleN"></param>
         /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
         /// <param name="dstArr"></param>
-        private static void fft(int sampleN, Complex[] srcArr, Complex[] dstArr) {
+        private static void fft(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
+            srcArr.CopyTo(dstArr, 0);
+
             int stageN = (int)Math.Log(sampleN, 2);//定数
             /* 回転子の事前計算 */
             var wMax = sampleN / 2;
-            var w = Enumerable.Range(0, wMax).Select(i => Complex.Exp(-i * 2 * Math.PI / sampleN)).ToArray();
-            /* FFt本体の計算 */
+            var wTable = Enumerable.Range(0, wMax).Select(i => Complex.Exp(-i * 2 * Math.PI / sampleN)).ToArray();
+            /* FFt本体の計算、複数ステージのバタフライ演算をする */
             for (int stage = 0; stage < stageN; ++stage) {
                 int indexN = sampleN >> (stage + 1);//sampleN -> sampleN/2 -> sampleN/4 ... 1
                 int subIndexN = 0x1 << (stage + 1);//2 -> 4 -> 8-> ... sampleN
@@ -140,17 +146,29 @@ namespace FFTTest {
                 Debug.WriteLine($"STAGE{stage} --bit-length[{bitLength}]--> Index[{indexN}][{subIndexN}]");
                 //0 ~ sampleN / 2まで2個ずつ処理する
                 for (int i = 0; i < sampleN / 2; ++i) {
-                    //データ選択
-                    int index = i >> stage;
-                    int subIndex = i & (subIndexN - 1);
-                    int dataIndex1 = addressingArr[(index << 1)];
-                    int dataIndex2 = addressingArr[(index << 1) + 1];
+                    //ビット反転前のインデックス
+                    int index1 = (i >> stage) << 1;
+                    int index2 = index1 + 1;
+                    int subIndex = i & ~(0xffff << stage);
+                    //ビット反転後のインデックス
+                    int reverseIndex1 = addressingArr[index1];
+                    int reverseIndex2 = addressingArr[index2];
                     //実データへのアドレスは {index,subIndex}
-                    int addr1 = (dataIndex1 << stage) + subIndex;//元の配列の位置
-                    int addr2 = (dataIndex2 << stage) + subIndex;//元の配列の位置
+                    int addr1 = (reverseIndex1 << stage) + subIndex;//元の配列の位置
+                    int addr2 = (reverseIndex2 << stage) + subIndex;//元の配列の位置
                     //回転子決定
                     int wIndex = (((subIndex) & ~(0xffff << stage)) << (stageN - stage - 1));
-                    Debug.WriteLine($"\tindex:{index:d4}\tsub:{subIndex:d4}\t\tdataIndex1:{dataIndex1:d4}\tdataIndex2:{dataIndex2:d4}\t\taddr1:{i:d4}\taddr2:{addr2:d4}\twIndex:{wIndex:d4}");
+                    Debug.WriteLine($"i:{i}\tindex[{index1}, {index2}]\treverseIndex[{reverseIndex1}, {reverseIndex2}]\tsubIndex:{subIndex}\taddr[{addr1}, {addr2}]\twIndex:{wIndex}");
+
+                    //計算
+                    var srcData1 = dstArr[addr1];
+                    var srcData2 = dstArr[addr2];
+                    var w = wTable[wIndex];
+                    var multiplyData = w * srcData2;
+                    var dstData1 = srcData1 + multiplyData;
+                    var dstData2 = srcData1 - multiplyData;
+                    dstArr[addr1] = dstData1;
+                    dstArr[addr2] = dstData2;
                 }
 
 
