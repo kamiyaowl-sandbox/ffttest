@@ -42,21 +42,6 @@ namespace FFTTest {
             freqChart.ChartAreas[0].AxisY.Title = "Power";
             freqChart.ChartAreas[0].AxisX.MajorGrid.Enabled = true;
             freqChart.ChartAreas[0].AxisY.MajorGrid.Enabled = true;
-
-            var r = new Random();
-            for (int i = 0; i < 100; ++i) {
-                var num1 = r.NextDouble() * 1000 * (r.Next(2) < 1 ? -1 : 1);
-                var num2 = r.NextDouble() * 1000 * (r.Next(2) < 1 ? -1 : 1);
-                var numResult = new SignedFixedPoint(12, 12) { Double = num1 + num2 };
-
-                var fp1 = new SignedFixedPoint(12, 12) { Double = num1 };
-                var fp2 = new SignedFixedPoint(12, 12) { Double = num2 };
-                var fpResult = fp1 + fp2;
-                Debug.WriteLine($"num1:{num1}\tfp1t:{fp1}");
-                Debug.WriteLine($"num2:{num2}\tfp2t:{fp2}");
-                Debug.WriteLine($"numResult:{numResult}\tfpResult:{fpResult}");
-            }
-
         }
 
         private void startFFTButton_Click(object sender, RoutedEventArgs e) {
