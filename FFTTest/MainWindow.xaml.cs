@@ -50,7 +50,7 @@ namespace FFTTest {
             IEnumerable<double> srcDatas = null;
             int srcSampleN;
             Complex[] srcArr;
-            Complex[] dstArr;
+            Complex[] dstArr1, dstArr2;
             //サンプリング周波数
             srcSampleN = int.Parse(sampleNCombo.Text);
             switch (sampleFreqCombo.SelectedIndex) {
@@ -81,13 +81,15 @@ namespace FFTTest {
                     break;
             }
             srcArr = srcDatas.Take(srcSampleN).Select(x => new Complex(x, 0)).ToArray();
-            dstArr = new Complex[srcSampleN];
+            dstArr1 = new Complex[srcSampleN];
+            dstArr2 = new Complex[srcSampleN];
             //一旦表示
             timeChart.Series.Clear();
             timeChart.AddSeries("src", sampleFreq, srcDatas.Take(srcSampleN));
             //FFT開始
             var startTime = Environment.TickCount;
-            fftImpl2(srcSampleN, srcArr, ref dstArr);
+            fft(srcSampleN, srcArr, ref dstArr1);
+            fft2(srcSampleN, srcArr, ref dstArr2);
             var elapsedTime = Environment.TickCount - startTime;
 
             var deltaF = sampleFreq / (srcSampleN);//スペクトラムの間隔
@@ -95,30 +97,19 @@ namespace FFTTest {
             timeText.Text = $"{elapsedTime}[ms]\r\n⊿f={deltaF}\r\n⊿T={deltaT}";
 
             freqChart.Series.Clear();
-            //freqChart.AddSeries("Re", dstArr
-            //                                .Select(x => x.Real)
-            //                                .ToArray());
-            //freqChart.AddSeries("Ie", dstArr
-            //                                .Select(x => x.Imaginary)
-            //                                .ToArray());
-            freqChart.AddSeries("fft", dstArr
+            freqChart.AddSeries("origin", dstArr1
                                             .Take(srcSampleN / 2)
-                                            .Select(x => x.Magnitude)
+                                            .Select(x => Math.Abs(x.Real))
+                                            .Select((x, i) => new DataPoint(i * deltaF, x))
+                                            .ToArray());
+            freqChart.AddSeries("embedded", dstArr2
+                                            .Take(srcSampleN / 2)
+                                            .Select(x => x.Real)
                                             .Select((x, i) => new DataPoint(i * deltaF, x))
                                             .ToArray());
 
         }
 
-        private static void bitReverseArrTest() {
-            for (int i = 0; i < 8; ++i) {
-                int max = (int)Math.Pow(2, i);
-                var table = generateBitReverseArr(max);
-                Debug.WriteLine($"MAX:{max}");
-                foreach (var data in table.Select((x, y) => new { Index = y, Reversed = x })) {
-                    Debug.WriteLine($"{i}\t{data.Index:X}\t{data.Reversed:X}");
-                }
-            }
-        }
 
         /// <summary>
         /// ビット反転テーブルを生成します
@@ -142,33 +133,35 @@ namespace FFTTest {
         /// <param name="sampleN"></param>
         /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
         /// <param name="dstArr">スペクトラムの配列</param>
-        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
-
+        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr, int intWidth = 12, int decWidth = 12) {
+            var srcReArr = srcArr.Select(x => new SignedFixedPoint(intWidth, decWidth) { DoubleValue = x.Real }).ToArray();
+            var ps = new SignedFixedPoint[sampleN];
+            fftImpl2(sampleN, intWidth, decWidth, srcReArr, ref ps);
+            for (int i = 0; i < sampleN; ++i) {
+                dstArr[i] = new Complex(ps[i].DoubleValue, 0);
+            }
         }
-        private static void fftImpl2(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
+        private static void fftImpl2(int sampleN, int intWidth, int decWidth, SignedFixedPoint[] srcReArr, ref SignedFixedPoint[] powerSpectrum) {
             //元データをビット反転してコピー
             var bitWidth = (int)Math.Log(sampleN, 2);
             var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシングテーブル
-            dstArr = new Complex[sampleN];
-            //Debug.WriteLine($"N = {sampleN} FFT Data BitReverseAddressing");
-            foreach (var pair in addressingArr.Select((y, x) => new { SrcIndex = x, DstIndex = y })) {
-                dstArr[pair.DstIndex] = srcArr[pair.SrcIndex];
+            var dstReArr = new SignedFixedPoint[sampleN];
+            var dstImArr = new SignedFixedPoint[sampleN];
 
-                //Debug.WriteLine($"\tsrc[0b{Convert.ToString(pair.SrcIndex, 2).PadLeft(bitWidth, '0')}]\t->\tdst[0b{Convert.ToString(pair.DstIndex, 2).PadLeft(bitWidth, '0')}]");
+            foreach (var pair in addressingArr.Select((y, x) => new { SrcIndex = x, DstIndex = y })) {
+                dstReArr[pair.DstIndex] = srcReArr[pair.SrcIndex];
+                dstImArr[pair.DstIndex] = new SignedFixedPoint(intWidth, decWidth) { RawData = 0x0 };
             }
             //バタフライ演算回数
             int stageN = (int)Math.Log(sampleN, 2);//定数
             //回転子の事前計算
             var wMax = sampleN / 2;
             var wTable = Enumerable.Range(0, wMax).Select(n => Complex.Exp(-Complex.ImaginaryOne * 2 * Math.PI * n / sampleN)).ToArray();
-
+            var wReTable = wTable.Select(x => x.Real).Select(x => new SignedFixedPoint(intWidth, decWidth) { DoubleValue = x }).ToArray();
+            var wImTable = wTable.Select(x => x.Imaginary).Select(x => new SignedFixedPoint(intWidth, decWidth) { DoubleValue = x }).ToArray();
 
             /* バタフライ演算をする */
             for (int stage = 0; stage < stageN; ++stage) {
-                int indexN = sampleN >> stage;
-                int subIndexN = 0x1 << stage;
-                //Debug.WriteLine($"STAGE{stage} Index[{indexN},{subIndexN}]");
-
                 //0 ~ sampleN / 2まで2個ずつ処理する
                 for (int i = 0; i < sampleN / 2; ++i) {
                     //対象データのインデックス+サブインデックス(2次元配列等価)
@@ -183,18 +176,34 @@ namespace FFTTest {
                     //Debug.WriteLine($"i:{i}\twIndex:{wIndex}\tdata1[{index1}, {subIndex}](addr:{addr1}) \t data2[{index2}, {subIndex}](addr:{addr2})");
 
                     //計算
-                    var srcData1 = dstArr[addr1];
-                    var srcData2 = dstArr[addr2];
-                    var w = wTable[wIndex];
-                    var multiplyData = w * srcData2;
-                    var dstData1 = srcData1 + multiplyData;
-                    var dstData2 = srcData1 - multiplyData;
-                    dstArr[addr1] = dstData1;
-                    dstArr[addr2] = dstData2;
-                    Debug.WriteLine($"{stage},{i},{addr1},{addr2},{multiplyData.Real},{multiplyData.Imaginary},{dstData1.Real},{dstData1.Imaginary},{dstData2.Real},{dstData2.Imaginary},");
+                    var srcDataRe1 = dstReArr[addr1];
+                    var srcDataIm1 = dstImArr[addr1];
+                    var srcDataRe2 = dstReArr[addr2];
+                    var srcDataIm2 = dstImArr[addr2];
+                    //w * srcData2
+                    var wRe = wReTable[wIndex];
+                    var wIm = wImTable[wIndex];
+                    var mulRe1Re2 = wRe * srcDataRe2;
+                    var mulIm1Im2 = wIm * srcDataIm2;
+                    var mulRe1Im2 = wRe * srcDataIm2;
+                    var mulRe2Im1 = wIm * srcDataRe2;
+                    var mulRe = mulRe1Re2 - mulIm1Im2;
+                    var mulIm = mulRe1Im2 + mulRe2Im1;
+                    //srcData1 + w * srcData2, srcData1 - w * srcData2
+                    var dstDataRe1 = srcDataRe1 + mulRe;
+                    var dstDataIm1 = srcDataIm1 + mulIm;
+                    var dstDataRe2 = srcDataRe1 - mulRe;
+                    var dstDataIm2 = srcDataIm1 - mulIm;
+                    dstReArr[addr1] = dstDataRe1;
+                    dstImArr[addr1] = dstDataIm1;
+                    dstReArr[addr2] = dstDataRe2;
+                    dstImArr[addr2] = dstDataIm2;
                 }
-
-
+            }
+            /* 計算結果をパワースペクトルに直す */
+            for (int i = 0; i < sampleN; ++i) {
+                //最終的な値を符号無しにすれば終わり
+                powerSpectrum[i] = dstReArr[i].IsSigned ? dstReArr[i].TwoComplementary : dstReArr[i];
             }
         }
         /// <summary>
