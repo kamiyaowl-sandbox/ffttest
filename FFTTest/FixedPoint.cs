@@ -71,6 +71,14 @@ namespace FFTTest {
             }
         }
         /// <summary>
+        /// 生のビット列で返します
+        /// </summary>
+        public UInt64 RawData => (((Sign ? (UInt64)0x1 : 0x0) << (Width - 1)) | (MaskIntegers << DecimalsWidth) | (MaskDecimals));
+        /// <summary>
+        /// 2の補数表現を返します
+        /// </summary>
+        public UInt64 TwoComplementary => ((~RawData) + 0x1) & ~(0xffffffffffffffff << Width);
+        /// <summary>
         /// VerilogHDLで表現されるフォーマットで返します
         /// </summary>
         public string VerilogFormat => $"{Width}'b{(Sign ? '1' : '0')}_{Convert.ToString(MaskIntegers, 2).PadLeft(IntegersWidth, '0')}_{Convert.ToString(MaskDecimals, 2).PadLeft(DecimalsWidth, '0')}";
@@ -79,19 +87,28 @@ namespace FFTTest {
 
 
         public SignedFixedPoint(int integersWidth, int decimalsWidth) {
+            Debug.Assert(0 < integersWidth && integersWidth < 32);
+            Debug.Assert(0 < decimalsWidth && decimalsWidth < 32);
+
             this.IntegersWidth = integersWidth;
             this.DecimalsWidth = decimalsWidth;
         }
 
         public static SignedFixedPoint operator +(SignedFixedPoint fp1, SignedFixedPoint fp2) {
             Debug.Assert(fp1.DecimalsWidth == fp2.DecimalsWidth && fp1.IntegersWidth == fp2.IntegersWidth);
-            var d = (UInt32)(fp1.MaskDecimals + fp2.MaskDecimals);//TODO:マイナスの処理
-            var i = fp1.SignedIntegers + fp2.SignedIntegers + (d >> fp1.DecimalsWidth);
+            var n1 = fp1.Sign ? fp1.TwoComplementary : fp1.RawData;
+            var n2 = fp2.Sign ? fp2.TwoComplementary : fp2.RawData;
+            var n = n1 + n2;
+
+            Debug.WriteLine($"\tfp1:{fp1} + fp2:{fp2} = n1:{((UInt32)n1).ToBinaryString(fp1.Width)} + n2:{((UInt32)n2).ToBinaryString(fp1.Width)} = n:{((UInt32)n).ToBinaryString(fp1.Width)}");
             return new SignedFixedPoint(fp1.IntegersWidth, fp1.DecimalsWidth) {
-                Sign = d < 0,
-                DecimalsRaw = d,
-                IntegersRaw = (UInt32)i,
+                Sign = (n & ((UInt64)0x1 << (fp1.Width - 1))) != 0x0,
+                IntegersRaw = (UInt32)((n >> fp1.DecimalsWidth) & ~((0xffffffff) << fp1.IntegersWidth)),
+                DecimalsRaw = (UInt32)(n & ~((0xffffffff) << fp1.DecimalsWidth)),
             };
         }
+    }
+    public static class FixedPointExtension {
+        public static string ToBinaryString(this UInt32 src, int width) => Convert.ToString(src, 2).PadLeft(width, '0');
     }
 }

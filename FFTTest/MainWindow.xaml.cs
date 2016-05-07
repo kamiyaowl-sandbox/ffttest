@@ -52,7 +52,9 @@ namespace FFTTest {
                 var fp1 = new SignedFixedPoint(12, 12) { Double = num1 };
                 var fp2 = new SignedFixedPoint(12, 12) { Double = num2 };
                 var fpResult = fp1 + fp2;
-                Console.WriteLine($"num1:{num1}\tnum2:{num2}\tnumResult:{numResult}\tfpResult:{fpResult}");
+                Debug.WriteLine($"num1:{num1}\tfp1t:{fp1}");
+                Debug.WriteLine($"num2:{num2}\tfp2t:{fp2}");
+                Debug.WriteLine($"numResult:{numResult}\tfpResult:{fpResult}");
             }
 
         }
@@ -100,7 +102,7 @@ namespace FFTTest {
             timeChart.AddSeries("src", sampleFreq, srcDatas.Take(srcSampleN));
             //FFT開始
             var startTime = Environment.TickCount;
-            fft(srcSampleN, srcArr, ref dstArr);
+            fftImpl2(srcSampleN, srcArr, ref dstArr);
             var elapsedTime = Environment.TickCount - startTime;
 
             var deltaF = sampleFreq / (srcSampleN);//スペクトラムの間隔
@@ -158,7 +160,7 @@ namespace FFTTest {
         private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
 
         }
-        private static void fft2Impl(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
+        private static void fftImpl2(int sampleN, Complex[] srcArr, ref Complex[] dstArr) {
             //元データをビット反転してコピー
             var bitWidth = (int)Math.Log(sampleN, 2);
             var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシングテーブル
@@ -184,7 +186,7 @@ namespace FFTTest {
 
                 //0 ~ sampleN / 2まで2個ずつ処理する
                 for (int i = 0; i < sampleN / 2; ++i) {
-                    //ビット反転前のインデックス
+                    //対象データのインデックス+サブインデックス(2次元配列等価)
                     int index1 = (i >> stage) << 1;
                     int index2 = index1 + 1;
                     int subIndex = i & ~(0xffff << stage);
@@ -262,7 +264,7 @@ namespace FFTTest {
                     var dstData2 = srcData1 - multiplyData;
                     dstArr[addr1] = dstData1;
                     dstArr[addr2] = dstData2;
-                    Debug.WriteLine($"{stage},{i},{addr1},{addr2},{multiplyData.Real},{multiplyData.Imaginary},{dstData1.Real},{dstData1.Imaginary},{dstData2.Real},{dstData2.Imaginary},");
+                    //Debug.WriteLine($"{stage},{i},{addr1},{addr2},{multiplyData.Real},{multiplyData.Imaginary},{dstData1.Real},{dstData1.Imaginary},{dstData2.Real},{dstData2.Imaginary},");
                 }
 
 
