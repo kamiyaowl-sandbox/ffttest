@@ -57,7 +57,7 @@ namespace FFTTest {
         /// 生のビット列で返します
         /// </summary>
         public UInt64 RawData {
-            get { return ((MaskIntegers << DecimalsWidth) | (MaskDecimals)); }
+            get { return (((UInt64)MaskIntegers << DecimalsWidth) | ((UInt64)MaskDecimals)); }
             set {
                 IntegersRaw = (UInt32)(value >> DecimalsWidth) & ~(0xffffffff << IntegersWidth);
                 DecimalsRaw = (UInt32)(value & ~(0xffffffff << DecimalsWidth));
@@ -68,7 +68,7 @@ namespace FFTTest {
         /// </summary>
         public SignedFixedPoint TwoComplementary {
             get {
-                var comp = ((~RawData) + 0x1) & ~(0xffffffffffffffff << Width);
+                var comp = ((UInt64)(~RawData) + 0x1) & ~((UInt64)0xffffffffffffffff << Width);
                 return new SignedFixedPoint(IntegersWidth, DecimalsWidth) {
                     RawData = comp,
                 };

@@ -133,7 +133,7 @@ namespace FFTTest {
         /// <param name="sampleN"></param>
         /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
         /// <param name="dstArr">スペクトラムの配列</param>
-        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr, int intWidth = 12, int decWidth = 12) {
+        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr, int intWidth = 24, int decWidth = 9) {
             var srcReArr = srcArr.Select(x => new SignedFixedPoint(intWidth, decWidth) { DoubleValue = x.Real }).ToArray();
             var ps = new SignedFixedPoint[sampleN];
             fftImpl2(sampleN, intWidth, decWidth, srcReArr, ref ps);
