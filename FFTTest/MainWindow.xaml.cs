@@ -89,7 +89,7 @@ namespace FFTTest {
             //FFT開始
             var startTime = Environment.TickCount;
             fft(srcSampleN, srcArr, ref dstArr1);
-            fft2(srcSampleN, srcArr, ref dstArr2);
+            fft2(srcSampleN, srcArr, ref dstArr2, int.Parse(intWidthText.Text), int.Parse(decWidthText.Text));
             var elapsedTime = Environment.TickCount - startTime;
 
             var deltaF = sampleFreq / (srcSampleN);//スペクトラムの間隔
@@ -128,12 +128,12 @@ namespace FFTTest {
         }
 
         /// <summary>
-        /// 高速フーリエ変換を行います(組み込み向けモディファイ)
+        /// 高速フーリエ変換を行います
         /// </summary>
         /// <param name="sampleN"></param>
         /// <param name="srcArr">データバッファ、データの並び替えは不要</param>
         /// <param name="dstArr">スペクトラムの配列</param>
-        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr, int intWidth = 24, int decWidth = 9) {
+        private static void fft2(int sampleN, Complex[] srcArr, ref Complex[] dstArr, int intWidth = 24, int decWidth = 8) {
             var srcReArr = srcArr.Select(x => new SignedFixedPoint(intWidth, decWidth) { DoubleValue = x.Real }).ToArray();
             var ps = new SignedFixedPoint[sampleN];
             fftImpl2(sampleN, intWidth, decWidth, srcReArr, ref ps);
@@ -141,13 +141,20 @@ namespace FFTTest {
                 dstArr[i] = new Complex(ps[i].DoubleValue, 0);
             }
         }
+        /// <summary>
+        /// 組み込み向けのFFT実装
+        /// </summary>
+        /// <param name="sampleN"></param>
+        /// <param name="intWidth"></param>
+        /// <param name="decWidth"></param>
+        /// <param name="srcReArr"></param>
+        /// <param name="powerSpectrum"></param>
         private static void fftImpl2(int sampleN, int intWidth, int decWidth, SignedFixedPoint[] srcReArr, ref SignedFixedPoint[] powerSpectrum) {
             //元データをビット反転してコピー
             var bitWidth = (int)Math.Log(sampleN, 2);
             var addressingArr = generateBitReverseArr(bitWidth).ToArray();//アドレッシングテーブル
             var dstReArr = new SignedFixedPoint[sampleN];
             var dstImArr = new SignedFixedPoint[sampleN];
-
             foreach (var pair in addressingArr.Select((y, x) => new { SrcIndex = x, DstIndex = y })) {
                 dstReArr[pair.DstIndex] = srcReArr[pair.SrcIndex];
                 dstImArr[pair.DstIndex] = new SignedFixedPoint(intWidth, decWidth) { RawData = 0x0 };

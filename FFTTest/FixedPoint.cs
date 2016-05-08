@@ -83,6 +83,7 @@ namespace FFTTest {
         public FixedPoint(int integersWidth, int decimalsWidth) {
             Debug.Assert(0 < integersWidth && integersWidth < 32);
             Debug.Assert(0 < decimalsWidth && decimalsWidth < 32);
+            Debug.Assert(decimalsWidth + integersWidth < 64);
 
             this.IntegersWidth = integersWidth;
             this.DecimalsWidth = decimalsWidth;
